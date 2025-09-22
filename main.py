@@ -120,7 +120,7 @@ def process_jobs():
             corpus_s3_path = (
                 job_data["corpus_s3_path"].strip("/") + "/" + job_data["language_iso"]
             )
-            annotations_s3_prefix = f"{DATASTES_PATH}{job_data['user_id']}/{job_data['training_dataset_id']}/"
+            annotations_s3_prefix = f"{DATASTES_PATH}{job_data['training_dataset_id']}/"
 
             files_to_process = []
             if job_data["corpus_files_subset"]:
