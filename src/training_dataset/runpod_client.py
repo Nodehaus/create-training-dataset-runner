@@ -4,17 +4,13 @@ from .base_client import BaseClient
 
 logger = logging.getLogger(__name__)
 
+RUNPOD_BASE_URL = "https://api.runpod.ai"
+
 
 class RunpodClient(BaseClient):
     """Client for interacting with RunPod IO API."""
 
-    def __init__(
-        self,
-        url: str,
-        pod_id: str,
-        api_key: str,
-        model: str
-    ):
+    def __init__(self, pod_id: str, api_key: str, model: str):
         """Initialize RunPod client.
 
         Args:
@@ -22,7 +18,7 @@ class RunpodClient(BaseClient):
             pod_id: The Pod ID on RunPod
             api_key: Optional API key for Authorization header
         """
-        super().__init__(url)
+        super().__init__()
         if not pod_id:
             raise ValueError("You must specify a Pod ID for runpod.")
         self.pod_id = pod_id
@@ -55,13 +51,13 @@ class RunpodClient(BaseClient):
                     "prompt": prompt,
                     "max_tokens": max_tokens,
                     "temperature": temperature,
-                    "top_p": top_p
+                    "top_p": top_p,
                 },
             }
         }
 
         response = self.make_request(
-            f"v2/{self.pod_id}/runsync", payload, api_key=self.api_key
+            f"{RUNPOD_BASE_URL}/v2/{self.pod_id}/runsync", payload, api_key=self.api_key
         )
         try:
             response_text = response["output"][0]["choices"][0]["text"].strip()
@@ -70,4 +66,3 @@ class RunpodClient(BaseClient):
                 f"Did not receive valid response from Runpod, response was: {response}"
             )
         return response_text
-

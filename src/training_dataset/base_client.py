@@ -10,13 +10,12 @@ logger = logging.getLogger(__name__)
 class BaseClient(ABC):
     """Abstract base class for all model clients."""
 
-    def __init__(self, url: str):
-        self.url = url
+    def __init__(self):
         self.session = requests.Session()
 
     def make_request(
         self,
-        endpoint: str,
+        url: str,
         data: Dict[str, Any] | None = None,
         method: str = "POST",
         api_key: str | None = None,
@@ -24,7 +23,6 @@ class BaseClient(ABC):
         """Make a request to the API.
 
         Args:
-            endpoint: API endpoint (can be empty string for direct URL usage)
             data: Request data for POST requests
             method: HTTP method (GET or POST)
             api_key: Optional API key for Authorization header
@@ -35,10 +33,6 @@ class BaseClient(ABC):
         Raises:
             requests.exceptions.RequestException: If the request fails
         """
-        if endpoint:
-            url = f"{self.url}/{endpoint}"
-        else:
-            url = self.url
 
         # Set default headers
         request_headers = {"Content-Type": "application/json"}
