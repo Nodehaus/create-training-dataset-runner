@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import time
+import traceback
 
 import boto3
 import requests
@@ -30,6 +31,7 @@ AI_PLATFORM_API_KEY = os.getenv("AI_PLATFORM_API_KEY", "")
 DATASTES_PATH = "datasets/"
 JOBS_PATH = "jobs/"
 JOBS_DONE_PATH = "jobs_done/"
+JOBS_FAILED_PATH = "jobs_failed/"
 
 
 def update_training_dataset_status_api(training_dataset_id: str, status: str) -> bool:
@@ -222,25 +224,43 @@ def process_jobs():
 
             # Move finished job file to `jobs_done/`
             job_filename = current_job.split("/")[-1]
-            done_job_key = f"{JOBS_DONE_PATH}{job_filename}"
+            jobs_done_key = f"{JOBS_DONE_PATH}{job_filename}"
 
             # Copy the job file to jobs_done/
             s3_client.copy_object(
                 Bucket=APP_S3_BUCKET,
                 CopySource={"Bucket": APP_S3_BUCKET, "Key": current_job},
-                Key=done_job_key,
+                Key=jobs_done_key,
             )
 
             # Delete the original job file
             s3_client.delete_object(Bucket=APP_S3_BUCKET, Key=current_job)
             logger.info(
-                f"Moved completed job file from {current_job} to {done_job_key}"
+                f"Moved completed job file from {current_job} to {jobs_done_key}"
             )
 
             update_training_dataset_status_api(training_dataset_id, "DONE")
 
         except Exception as e:
             logger.error("Job failed!!!!!!!!!!!!!!!!!!!")
+
+            # Move failed job file to `jobs_failed/`
+            job_filename = current_job.split("/")[-1]
+            jobs_failed_key = f"{JOBS_FAILED_PATH}{job_filename}"
+
+            # Copy the job file to jobs_failed/
+            s3_client.copy_object(
+                Bucket=APP_S3_BUCKET,
+                CopySource={"Bucket": APP_S3_BUCKET, "Key": current_job},
+                Key=jobs_failed_key,
+            )
+
+            # Delete the original job file
+            s3_client.delete_object(Bucket=APP_S3_BUCKET, Key=current_job)
+            logger.info(
+                f"Moved completed job file from {current_job} to {jobs_failed_key}"
+            )
+
             update_training_dataset_status_api(training_dataset_id, "FAILED")
             raise e
 
@@ -250,7 +270,8 @@ def main():
         try:
             process_jobs()
         except Exception:
-            # For now we just continue to loop and retry
+            logger.error(traceback.format_exc())
+            # For now we just continue to loop
             pass
         logger.info("Waiting to process next job...")
         time.sleep(60)
