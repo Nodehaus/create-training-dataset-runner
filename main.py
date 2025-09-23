@@ -29,9 +29,9 @@ AI_PLATFORM_API_BASE_URL = os.getenv("AI_PLATFORM_API_BASE_URL", "")
 AI_PLATFORM_API_KEY = os.getenv("AI_PLATFORM_API_KEY", "")
 
 DATASTES_PATH = "datasets/"
-JOBS_PATH = "jobs/"
-JOBS_DONE_PATH = "jobs_done/"
-JOBS_FAILED_PATH = "jobs_failed/"
+JOBS_PATH = "jobs/datasets/"
+JOBS_DONE_PATH = "jobs_done/datasets/"
+JOBS_FAILED_PATH = "jobs_failed/datasets/"
 
 
 def update_training_dataset_status_api(training_dataset_id: str, status: str) -> bool:
