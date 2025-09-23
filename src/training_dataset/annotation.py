@@ -25,6 +25,7 @@ def generate_annotations(
     generate_prompt: str,
     examples_to_create: int,
     use_chunking: bool = True,
+    language_iso: str = "eng",
 ) -> List[Dict[str, Any]]:
     """
     Generate annotations for a given text.
@@ -57,7 +58,9 @@ def generate_annotations(
         annotations = []
 
         while retry_count < max_retries:
-            prompt = _create_prompt(chunk, generate_prompt, examples_per_chunk)
+            prompt = _create_prompt(
+                chunk, generate_prompt, examples_per_chunk, language_iso
+            )
             start_time = time.time()
             response_text = llm_client.generate(prompt)
             end_time = time.time()
@@ -94,12 +97,15 @@ def generate_annotations(
     return all_annotations
 
 
-def _create_prompt(text: str, generate_prompt: str, examples_to_create: int) -> str:
+def _create_prompt(
+    text: str, generate_prompt: str, examples_to_create: int, language_iso: str
+) -> str:
     return (
         generate_prompt
         + f"""
     
-Generate {examples_to_create} question/answer pairs depending on content richness.
+Generate {examples_to_create} data items depending on content richness. The content \
+of the data items must be in the language with ISO code "{language_iso}".
 
 TEXT:
 

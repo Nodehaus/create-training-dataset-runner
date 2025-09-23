@@ -110,6 +110,8 @@ def process_jobs():
 
         update_training_dataset_status_api(training_dataset_id, "RUNNING")
 
+        language_iso = job_data.get("language_iso")
+
         # TODO: Improve error handling here, make it more specific when we know which
         # errors occur.
         try:
@@ -119,9 +121,7 @@ def process_jobs():
                 model=job_data["generate_model"],
             )
 
-            corpus_s3_path = (
-                job_data["corpus_s3_path"].strip("/") + "/" + job_data["language_iso"]
-            )
+            corpus_s3_path = job_data["corpus_s3_path"].strip("/") + "/" + language_iso
             annotations_s3_prefix = f"{DATASTES_PATH}{job_data['training_dataset_id']}/"
 
             files_to_process = []
@@ -186,6 +186,7 @@ def process_jobs():
                     doc_data.get("id"),
                     job_data["generate_prompt"],
                     examples_per_document,
+                    language_iso=language_iso,
                 )
                 end_time = time.time()
                 inference_time = end_time - start_time
