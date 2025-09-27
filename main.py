@@ -133,9 +133,10 @@ def process_jobs():
             else:
                 files_to_process = get_files_in_path(s3_client, corpus_s3_path)
 
+            generate_examples_number = min(1000, job_data["generate_examples_number"])
             examples_per_document = max(
                 1,
-                math.ceil(job_data["generate_examples_number"] / len(files_to_process)),
+                math.ceil(generate_examples_number / len(files_to_process)),
             )
             examples_created = 0
 
@@ -143,7 +144,7 @@ def process_jobs():
                 f"Will process {len(files_to_process)} files, {examples_per_document} examples per document"
             )
 
-            for document_filepath in files_to_process[:100]:
+            for document_filepath in files_to_process:
                 logger.info(f"Processing file {document_filepath}...")
 
                 document_filename = document_filepath.split("/")[-1]
