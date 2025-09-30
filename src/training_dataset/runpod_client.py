@@ -30,7 +30,7 @@ class RunpodClient(BaseClient):
         prompt: str,
         temperature: float = 0.1,
         top_p: float = 0.9,
-        max_tokens: int = 1000,
+        max_tokens: int = 4096,
     ) -> str:
         """Generate text completion using RunPod API.
 
