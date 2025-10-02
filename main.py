@@ -89,6 +89,118 @@ def get_files_in_path(s3_client, path: str) -> list[str]:
     return files
 
 
+def create_annotations_with_corpus(
+    s3_client,
+    runpod_client,
+    job_data: dict,
+    annotations_s3_prefix: str,
+    generate_examples_number: int,
+    language_iso: str,
+) -> None:
+    """Create annotations from corpus documents.
+
+    Args:
+        s3_client: Configured boto3 S3 client
+        runpod_client: Configured RunPod client
+        job_data: Job configuration data
+        annotations_s3_prefix: S3 prefix for annotation files
+        generate_examples_number: Number of examples to generate
+        language_iso: Language ISO code
+    """
+    corpus_s3_path = job_data["corpus_s3_path"].strip("/") + "/" + language_iso
+
+    files_to_process = []
+    if job_data["corpus_files_subset"]:
+        files_to_process = [
+            f"{corpus_s3_path}/{filename}"
+            for filename in job_data["corpus_files_subset"]
+        ]
+    else:
+        files_to_process = get_files_in_path(s3_client, corpus_s3_path)
+
+    examples_per_document = max(
+        1,
+        math.ceil(generate_examples_number / len(files_to_process)),
+    )
+    examples_created = 0
+
+    logger.info(
+        f"Will process {len(files_to_process)} files, {examples_per_document} examples per document"
+    )
+
+    for document_filepath in files_to_process:
+        logger.info(f"Processing file {document_filepath}...")
+
+        document_filename = document_filepath.split("/")[-1]
+        annotations_filepath = f"{annotations_s3_prefix}{document_filename}"
+
+        try:
+            s3_client.head_object(Bucket=APP_S3_BUCKET, Key=annotations_filepath)
+
+            # Download file, count annotations and add to examples_created
+            response = s3_client.get_object(
+                Bucket=APP_S3_BUCKET, Key=annotations_filepath
+            )
+            annotation_data = json.loads(response["Body"].read().decode("utf-8"))
+            existing_annotations_count = annotation_data.get("count_annotations")
+            examples_created += existing_annotations_count
+            logger.info(
+                f"Added {existing_annotations_count} existing annotations to count"
+            )
+            continue
+        except s3_client.exceptions.ClientError:
+            # File doesn't exist, proceed with generation
+            pass
+
+        response = s3_client.get_object(Bucket=APP_S3_BUCKET, Key=document_filepath)
+        doc_data = json.loads(response["Body"].read().decode("utf-8"))
+        content = doc_data.get("content")
+
+        start_time = time.time()
+        annotations = generate_annotations(
+            runpod_client,
+            content,
+            doc_data.get("id"),
+            job_data["generate_prompt"],
+            examples_per_document,
+            language_iso=language_iso,
+        )
+        end_time = time.time()
+        inference_time = end_time - start_time
+        count_annotations = len(annotations)
+        avg_inference_time_per_annotation = inference_time / count_annotations
+
+        data = {
+            "generate_model": job_data["generate_model"],
+            "generate_model_runner": job_data["generate_model_runner"],
+            "gpu_info": {},
+            "input_field": job_data.get("input_field"),
+            "output_field": job_data.get("output_field"),
+            "count_annotations": len(annotations),
+            "total_generation_time": round(inference_time, 3),
+            "avg_generation_time_per_annotation": round(
+                avg_inference_time_per_annotation, 3
+            ),
+            "training_dataset_id": job_data["training_dataset_id"],
+            "user_id": job_data["user_id"],
+            "annotations": annotations,
+        }
+
+        # Write annotations to S3
+        s3_client.put_object(
+            Bucket=APP_S3_BUCKET,
+            Key=annotations_filepath,
+            Body=json.dumps(data, indent=2).encode("utf-8"),
+            ContentType="application/json",
+        )
+        logger.info(f"Annotations saved to S3 at {annotations_filepath}")
+
+        examples_created += len(annotations)
+        if examples_created >= job_data["generate_examples_number"]:
+            logger.info(f"Loop exit as we created {examples_created} examples")
+            break
+
+
 def process_jobs():
     """Generate annotations for documents stored in S3."""
     # Initialize S3 client
@@ -121,108 +233,18 @@ def process_jobs():
                 model=job_data["generate_model"],
             )
 
-            corpus_s3_path = job_data["corpus_s3_path"].strip("/") + "/" + language_iso
             annotations_s3_prefix = f"{DATASTES_PATH}{job_data['training_dataset_id']}/"
-
-            files_to_process = []
-            if job_data["corpus_files_subset"]:
-                files_to_process = [
-                    f"{corpus_s3_path}/{filename}"
-                    for filename in job_data["corpus_files_subset"]
-                ]
-            else:
-                files_to_process = get_files_in_path(s3_client, corpus_s3_path)
-
             generate_examples_number = min(1000, job_data["generate_examples_number"])
-            examples_per_document = max(
-                1,
-                math.ceil(generate_examples_number / len(files_to_process)),
-            )
-            examples_created = 0
 
-            logger.info(
-                f"Will process {len(files_to_process)} files, {examples_per_document} examples per document"
-            )
-
-            for document_filepath in files_to_process:
-                logger.info(f"Processing file {document_filepath}...")
-
-                document_filename = document_filepath.split("/")[-1]
-                annotations_filepath = f"{annotations_s3_prefix}{document_filename}"
-
-                try:
-                    s3_client.head_object(
-                        Bucket=APP_S3_BUCKET, Key=annotations_filepath
-                    )
-
-                    # Download file, count annotations and add to examples_created
-                    response = s3_client.get_object(
-                        Bucket=APP_S3_BUCKET, Key=annotations_filepath
-                    )
-                    annotation_data = json.loads(
-                        response["Body"].read().decode("utf-8")
-                    )
-                    existing_annotations_count = annotation_data.get(
-                        "count_annotations"
-                    )
-                    examples_created += existing_annotations_count
-                    logger.info(
-                        f"Added {existing_annotations_count} existing annotations to count"
-                    )
-                    continue
-                except s3_client.exceptions.ClientError:
-                    # File doesn't exist, proceed with generation
-                    pass
-
-                response = s3_client.get_object(
-                    Bucket=APP_S3_BUCKET, Key=document_filepath
-                )
-                doc_data = json.loads(response["Body"].read().decode("utf-8"))
-                content = doc_data.get("content")
-
-                start_time = time.time()
-                annotations = generate_annotations(
+            if job_data["corpus_s3_path"] != "":
+                create_annotations_with_corpus(
+                    s3_client,
                     runpod_client,
-                    content,
-                    doc_data.get("id"),
-                    job_data["generate_prompt"],
-                    examples_per_document,
-                    language_iso=language_iso,
+                    job_data,
+                    annotations_s3_prefix,
+                    generate_examples_number,
+                    language_iso,
                 )
-                end_time = time.time()
-                inference_time = end_time - start_time
-                count_annotations = len(annotations)
-                avg_inference_time_per_annotation = inference_time / count_annotations
-
-                data = {
-                    "generate_model": job_data["generate_model"],
-                    "generate_model_runner": job_data["generate_model_runner"],
-                    "gpu_info": {},
-                    "input_field": job_data.get("input_field"),
-                    "output_field": job_data.get("output_field"),
-                    "count_annotations": len(annotations),
-                    "total_generation_time": round(inference_time, 3),
-                    "avg_generation_time_per_annotation": round(
-                        avg_inference_time_per_annotation, 3
-                    ),
-                    "training_dataset_id": training_dataset_id,
-                    "user_id": job_data["user_id"],
-                    "annotations": annotations,
-                }
-
-                # Write annotations to S3
-                s3_client.put_object(
-                    Bucket=APP_S3_BUCKET,
-                    Key=annotations_filepath,
-                    Body=json.dumps(data, indent=2).encode("utf-8"),
-                    ContentType="application/json",
-                )
-                logger.info(f"Annotations saved to S3 at {annotations_filepath}")
-
-                examples_created += len(annotations)
-                if examples_created >= job_data["generate_examples_number"]:
-                    logger.info(f"Loop exit as we created {examples_created} examples")
-                    break
 
             # Move finished job file to `jobs_done/`
             job_filename = current_job.split("/")[-1]
