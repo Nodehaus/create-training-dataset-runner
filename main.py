@@ -9,7 +9,10 @@ import boto3
 import requests
 from dotenv import load_dotenv
 
-from training_dataset.annotation import generate_annotations
+from training_dataset.annotation import (
+    generate_annotations,
+    generate_annotations_with_text,
+)
 from training_dataset.runpod_client import RunpodClient
 
 # Configure logging for all modules
@@ -157,7 +160,7 @@ def create_annotations_with_corpus(
         content = doc_data.get("content")
 
         start_time = time.time()
-        annotations = generate_annotations(
+        annotations = generate_annotations_with_text(
             runpod_client,
             content,
             doc_data.get("id"),
@@ -201,6 +204,63 @@ def create_annotations_with_corpus(
             break
 
 
+def create_annotations(
+    s3_client,
+    runpod_client,
+    job_data: dict,
+    annotations_s3_prefix: str,
+    generate_examples_number: int,
+    language_iso: str,
+) -> None:
+    """Create annotations without corpus documents.
+
+    Args:
+        s3_client: Configured boto3 S3 client
+        runpod_client: Configured RunPod client
+        job_data: Job configuration data
+        annotations_s3_prefix: S3 prefix for annotation files
+        generate_examples_number: Number of examples to generate
+        language_iso: Language ISO code
+    """
+    start_time = time.time()
+    annotations = generate_annotations(
+        runpod_client,
+        job_data["generate_prompt"],
+        generate_examples_number,
+        language_iso=language_iso,
+    )
+    end_time = time.time()
+    inference_time = end_time - start_time
+    count_annotations = len(annotations)
+    avg_inference_time_per_annotation = inference_time / count_annotations
+
+    data = {
+        "generate_model": job_data["generate_model"],
+        "generate_model_runner": job_data["generate_model_runner"],
+        "gpu_info": {},
+        "input_field": job_data.get("input_field"),
+        "output_field": job_data.get("output_field"),
+        "count_annotations": len(annotations),
+        "total_generation_time": round(inference_time, 3),
+        "avg_generation_time_per_annotation": round(
+            avg_inference_time_per_annotation, 3
+        ),
+        "training_dataset_id": job_data["training_dataset_id"],
+        "user_id": job_data["user_id"],
+        "annotations": annotations,
+    }
+
+    annotations_filepath = f"{annotations_s3_prefix}dataset.json"
+    # Write annotations to S3
+    s3_client.put_object(
+        Bucket=APP_S3_BUCKET,
+        Key=annotations_filepath,
+        Body=json.dumps(data, indent=2).encode("utf-8"),
+        ContentType="application/json",
+    )
+    logger.info(f"Annotations saved to S3 at {annotations_filepath}")
+
+
 def process_jobs():
     """Generate annotations for documents stored in S3."""
     # Initialize S3 client
@@ -238,6 +298,15 @@ def process_jobs():
 
             if job_data["corpus_s3_path"] != "":
                 create_annotations_with_corpus(
+                    s3_client,
+                    runpod_client,
+                    job_data,
+                    annotations_s3_prefix,
+                    generate_examples_number,
+                    language_iso,
+                )
+            else:
+                create_annotations(
                     s3_client,
                     runpod_client,
                     job_data,

@@ -2,7 +2,7 @@ import json
 import logging
 import math
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 from tqdm import tqdm
 
@@ -10,6 +10,8 @@ from .base_client import BaseClient
 from .utils import split_text_into_chunks_with_offsets
 
 logger = logging.getLogger(__name__)
+
+MAX_RETRIES = 3
 
 
 class JsonNotFoundError(Exception):
@@ -20,13 +22,52 @@ class JsonNotFoundError(Exception):
 
 def generate_annotations(
     llm_client: BaseClient,
+    generate_prompt: str,
+    examples_to_create: int,
+    language_iso: str = "eng",
+) -> list[dict[str, Any]]:
+    retry_count = 0
+    annotations = []
+
+    while retry_count < MAX_RETRIES:
+        prompt = _create_prompt(generate_prompt, examples_to_create, language_iso)
+        start_time = time.time()
+        response_text = llm_client.generate(prompt)
+        end_time = time.time()
+        inference_time = end_time - start_time
+
+        try:
+            annotations = _parse_response(response_text)
+            break  # Success, exit retry loop
+        except (JsonNotFoundError, json.decoder.JSONDecodeError):
+            retry_count += 1
+            if retry_count < MAX_RETRIES:
+                logger.warning(
+                    f"JSON parsing error, retrying "
+                    f"({retry_count}/{MAX_RETRIES}), "
+                    f"response was: {response_text}"
+                )
+            else:
+                logger.error(
+                    f"JSON parsing error after {MAX_RETRIES} retries, "
+                    f"skipping chunk, response was: {response_text}"
+                )
+
+    for annotation in annotations:
+        annotation["inference_time_seconds"] = round(inference_time, 3)
+
+    return annotations
+
+
+def generate_annotations_with_text(
+    llm_client: BaseClient,
     text: str,
     document_id: str,
     generate_prompt: str,
     examples_to_create: int,
     use_chunking: bool = True,
     language_iso: str = "eng",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Generate annotations for a given text.
 
@@ -53,12 +94,11 @@ def generate_annotations(
     logger.info(f"Creating {examples_per_chunk} examples per chunk")
 
     for chunk, start_offset, end_offset in tqdm(chunks_with_offsets):
-        max_retries = 3
         retry_count = 0
         annotations = []
 
-        while retry_count < max_retries:
-            prompt = _create_prompt(
+        while retry_count < MAX_RETRIES:
+            prompt = _create_prompt_with_text(
                 chunk, generate_prompt, examples_per_chunk, language_iso
             )
             start_time = time.time()
@@ -71,15 +111,15 @@ def generate_annotations(
                 break  # Success, exit retry loop
             except (JsonNotFoundError, json.decoder.JSONDecodeError):
                 retry_count += 1
-                if retry_count < max_retries:
+                if retry_count < MAX_RETRIES:
                     logger.warning(
                         f"JSON parsing error, retrying "
-                        f"({retry_count}/{max_retries}), "
+                        f"({retry_count}/{MAX_RETRIES}), "
                         f"response was: {response_text}"
                     )
                 else:
                     logger.error(
-                        f"JSON parsing error after {max_retries} retries, "
+                        f"JSON parsing error after {MAX_RETRIES} retries, "
                         f"skipping chunk, response was: {response_text}"
                     )
 
@@ -98,6 +138,20 @@ def generate_annotations(
 
 
 def _create_prompt(
+    generate_prompt: str, examples_to_create: int, language_iso: str
+) -> str:
+    return (
+        generate_prompt
+        + f"""
+    
+Generate {examples_to_create} data items depending on content richness. The content \
+of the data items must be in the language with ISO code "{language_iso}".
+
+JSON:"""
+    )
+
+
+def _create_prompt_with_text(
     text: str, generate_prompt: str, examples_to_create: int, language_iso: str
 ) -> str:
     return (
@@ -115,7 +169,7 @@ JSON:"""
     )
 
 
-def _parse_response(response: str) -> List[Dict[str, Any]]:
+def _parse_response(response: str) -> list[dict[str, Any]]:
     """Parse the model response and extract items."""
     json_start = response.find("{")
     json_end = response.rfind("}") + 1
