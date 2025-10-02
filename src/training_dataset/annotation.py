@@ -145,7 +145,9 @@ def _create_prompt(
         + f"""
     
 Generate {examples_to_create} data items depending on content richness. The content \
-of the data items must be in the language with ISO code "{language_iso}".
+of the data items must be in the language with ISO code "{language_iso}". The content \
+of the data items will be strings only, so we will have a flat JSON structure with key \
+and value both strings.
 
 JSON:"""
     )
