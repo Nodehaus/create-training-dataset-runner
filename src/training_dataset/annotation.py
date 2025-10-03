@@ -52,6 +52,7 @@ def generate_annotations(
     # Calculate how many examples fit in one batch (conservative)
     tokens_per_example = math.ceil(expected_output_size_chars / CHARS_PER_TOKEN)
     examples_per_batch = max(1, math.floor(available_tokens / tokens_per_example))
+    examples_per_batch = 5
 
     logger.info(
         f"Generating {examples_to_create} examples in batches of {examples_per_batch} "
@@ -60,47 +61,44 @@ def generate_annotations(
     all_annotations = []
     examples_remaining = examples_to_create
 
-    while examples_remaining > 0:
-        batch_size = min(examples_per_batch, examples_remaining)
-        retry_count = 0
-        annotations = []
+    with tqdm(total=examples_to_create, desc="Generating examples") as pbar:
+        while examples_remaining > 0:
+            batch_size = min(examples_per_batch, examples_remaining)
+            retry_count = 0
+            annotations = []
 
-        while retry_count < MAX_RETRIES:
-            prompt = _create_prompt(
-                generate_prompt, json_output_fields, batch_size, language_iso
-            )
-            start_time = time.time()
-            response_text = llm_client.generate(prompt)
-            end_time = time.time()
-            inference_time = end_time - start_time
+            while retry_count < MAX_RETRIES:
+                prompt = _create_prompt(
+                    generate_prompt, json_output_fields, batch_size, language_iso
+                )
+                start_time = time.time()
+                response_text = llm_client.generate(prompt)
+                end_time = time.time()
+                inference_time = end_time - start_time
 
-            try:
-                annotations = _parse_response(response_text)
-                break  # Success, exit retry loop
-            except (JsonNotFoundError, json.decoder.JSONDecodeError):
-                retry_count += 1
-                if retry_count < MAX_RETRIES:
-                    logger.warning(
-                        f"JSON parsing error, retrying "
-                        f"({retry_count}/{MAX_RETRIES}), "
-                        f"response was: {response_text}"
-                    )
-                else:
-                    logger.error(
-                        f"JSON parsing error after {MAX_RETRIES} retries, "
-                        f"skipping batch, response was: {response_text}"
-                    )
+                try:
+                    annotations = _parse_response(response_text)
+                    break  # Success, exit retry loop
+                except (JsonNotFoundError, json.decoder.JSONDecodeError):
+                    retry_count += 1
+                    if retry_count < MAX_RETRIES:
+                        logger.warning(
+                            f"JSON parsing error, retrying "
+                            f"({retry_count}/{MAX_RETRIES}), "
+                            f"response was: {response_text}"
+                        )
+                    else:
+                        logger.error(
+                            f"JSON parsing error after {MAX_RETRIES} retries, "
+                            f"skipping batch, response was: {response_text}"
+                        )
 
-        for annotation in annotations:
-            annotation["inference_time_seconds"] = round(inference_time, 3)
+            for annotation in annotations:
+                annotation["inference_time_seconds"] = round(inference_time, 3)
 
-        all_annotations.extend(annotations)
-        examples_remaining -= len(annotations)
-
-        logger.info(
-            f"Generated {len(annotations)} examples, "
-            f"{len(all_annotations)}/{examples_to_create} total"
-        )
+            all_annotations.extend(annotations)
+            examples_remaining -= len(annotations)
+            pbar.update(len(annotations))
 
     return all_annotations
 
