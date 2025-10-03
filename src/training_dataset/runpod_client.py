@@ -5,6 +5,7 @@ from .base_client import BaseClient
 logger = logging.getLogger(__name__)
 
 RUNPOD_BASE_URL = "https://api.runpod.ai"
+MAX_TOKENS = 16384
 
 
 class RunpodClient(BaseClient):
@@ -30,7 +31,7 @@ class RunpodClient(BaseClient):
         prompt: str,
         temperature: float = 0.1,
         top_p: float = 0.9,
-        max_tokens: int = 16384,
+        max_tokens: int = MAX_TOKENS,
     ) -> str:
         """Generate text completion using RunPod API.
 

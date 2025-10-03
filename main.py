@@ -63,6 +63,7 @@ def update_training_dataset_status_api(training_dataset_id: str, status: str) ->
         return True
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to update training dataset status: {e}")
+        logger.error(f"Response body: {response.text}")
         return False
 
 
@@ -165,6 +166,7 @@ def create_annotations_with_corpus(
             content,
             doc_data.get("id"),
             job_data["generate_prompt"],
+            job_data["json_object_fields"],
             examples_per_document,
             language_iso=language_iso,
         )
@@ -226,6 +228,8 @@ def create_annotations(
     annotations = generate_annotations(
         runpod_client,
         job_data["generate_prompt"],
+        job_data["json_object_fields"],
+        job_data["expected_output_size_chars"],
         generate_examples_number,
         language_iso=language_iso,
     )
