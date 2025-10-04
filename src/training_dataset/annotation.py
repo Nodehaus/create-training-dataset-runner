@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from .base_client import BaseClient
 from .runpod_client import MAX_TOKENS
+from .translations import COMMAND_TEMPLATE
 from .utils import split_text_into_chunks_with_offsets
 
 logger = logging.getLogger(__name__)
@@ -242,9 +243,8 @@ Return your response as valid JSON with the following structure:
     ]
 }}
 
-Only return valid JSON. If the text doesn't contain enough information for meaningful \
-questions, return {{"items": []}}. The field values are always strings, you need to \
-output flat JSON with key/values as string.
+Only return valid JSON. The field values are always strings, you need to output flat \
+JSON with key/values as string.
 
 Generate {examples_to_create} data items depending on content richness. The content \
 of the data items must be in the language with ISO code "{language_iso}".
@@ -253,6 +253,9 @@ of the data items must be in the language with ISO code "{language_iso}".
 
     if text is not None:
         prompt += f"""
+If the text doesn't contain enough information for meaningful \
+questions, return {{"items": []}}.
+
 TEXT:
 
 {text}
@@ -307,3 +310,19 @@ def _validate_annotations(annotations: list[dict[str, str]], expected_keys: set[
     for annotation in annotations:
         if set(annotation.keys()) != expected_keys:
             raise AnnotationsValidationError
+
+
+def add_command_prefix_to_input(
+    annotations: list[dict[str, str]],
+    input_field: str,
+    output_field: str,
+    language_iso: str,
+) -> list[dict[str, str]]:
+    if input_field != "question" and input_field != "source_text":
+        command = COMMAND_TEMPLATE.get(language_iso, COMMAND_TEMPLATE["eng"]).format(
+            input_field=input_field, output_field=output_field
+        )
+        for annotation in annotations:
+            annotation[input_field] = command + annotation[input_field]
+
+    return annotations

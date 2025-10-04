@@ -10,6 +10,7 @@ import requests
 from dotenv import load_dotenv
 
 from training_dataset.annotation import (
+    add_command_prefix_to_input,
     generate_annotations,
     generate_annotations_with_text,
 )
@@ -175,12 +176,20 @@ def create_annotations_with_corpus(
         count_annotations = len(annotations)
         avg_inference_time_per_annotation = inference_time / count_annotations
 
+        input_field = job_data.get("input_field")
+        output_field = job_data.get("output_field")
+        if input_field is None or output_field is None:
+            raise ValueError("Could not find input field or output field.")
+        annotations = add_command_prefix_to_input(
+            annotations, input_field, output_field, language_iso
+        )
+
         data = {
             "generate_model": job_data["generate_model"],
             "generate_model_runner": job_data["generate_model_runner"],
             "gpu_info": {},
-            "input_field": job_data.get("input_field"),
-            "output_field": job_data.get("output_field"),
+            "input_field": input_field,
+            "output_field": output_field,
             "count_annotations": len(annotations),
             "total_generation_time": round(inference_time, 3),
             "avg_generation_time_per_annotation": round(
@@ -238,12 +247,20 @@ def create_annotations(
     count_annotations = len(annotations)
     avg_inference_time_per_annotation = inference_time / count_annotations
 
+    input_field = job_data.get("input_field")
+    output_field = job_data.get("output_field")
+    if input_field is None or output_field is None:
+        raise ValueError("Could not find input field or output field.")
+    annotations = add_command_prefix_to_input(
+        annotations, input_field, output_field, language_iso
+    )
+
     data = {
         "generate_model": job_data["generate_model"],
         "generate_model_runner": job_data["generate_model_runner"],
         "gpu_info": {},
-        "input_field": job_data.get("input_field"),
-        "output_field": job_data.get("output_field"),
+        "input_field": input_field,
+        "output_field": output_field,
         "count_annotations": len(annotations),
         "total_generation_time": round(inference_time, 3),
         "avg_generation_time_per_annotation": round(
