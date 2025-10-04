@@ -21,6 +21,10 @@ class JsonNotFoundError(Exception):
     pass
 
 
+class AnnotationsValidationError(Exception):
+    pass
+
+
 def generate_annotations(
     llm_client: BaseClient,
     generate_prompt: str,
@@ -42,6 +46,9 @@ def generate_annotations(
     Returns:
         List of annotation dictionaries
     """
+    example_output = json.loads(json_output_fields)
+    expected_keys = set(example_output.keys())
+
     CHARS_PER_TOKEN = 3
     PROMPT_OVERHEAD_TOKENS = 500
     JSON_OVERHEAD_TOKENS = 200
@@ -78,8 +85,13 @@ def generate_annotations(
 
                 try:
                     annotations = _parse_response(response_text)
+                    _validate_annotations(annotations, expected_keys)
                     break  # Success, exit retry loop
-                except (JsonNotFoundError, json.decoder.JSONDecodeError):
+                except (
+                    JsonNotFoundError,
+                    json.decoder.JSONDecodeError,
+                    AnnotationsValidationError,
+                ):
                     retry_count += 1
                     if retry_count < MAX_RETRIES:
                         logger.warning(
@@ -132,6 +144,9 @@ def generate_annotations_with_text(
     else:
         chunks_with_offsets = [(text, 0, len(text))]
 
+    example_output = json.loads(json_output_fields)
+    expected_keys = set(example_output.keys())
+
     all_annotations = []
     examples_per_chunk = max(
         1, math.ceil(examples_to_create / len(chunks_with_offsets))
@@ -157,8 +172,13 @@ def generate_annotations_with_text(
 
             try:
                 annotations = _parse_response(response_text)
+                _validate_annotations(annotations, expected_keys)
                 break  # Success, exit retry loop
-            except (JsonNotFoundError, json.decoder.JSONDecodeError):
+            except (
+                JsonNotFoundError,
+                json.decoder.JSONDecodeError,
+                AnnotationsValidationError,
+            ):
                 retry_count += 1
                 if retry_count < MAX_RETRIES:
                     logger.warning(
@@ -281,3 +301,9 @@ def _parse_response(response: str) -> list[dict[str, Any]]:
         return []
 
     return items
+
+
+def _validate_annotations(annotations: list[dict[str, str]], expected_keys: set[str]):
+    for annotation in annotations:
+        if set(annotation.keys()) != expected_keys:
+            raise AnnotationsValidationError
