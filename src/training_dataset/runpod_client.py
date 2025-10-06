@@ -32,7 +32,7 @@ class RunpodClient(BaseClient):
         temperature: float = 0.1,
         top_p: float = 0.9,
         max_tokens: int = MAX_TOKENS,
-    ) -> str:
+    ) -> tuple[str, dict]:
         """Generate text completion using RunPod API.
 
         Args:
@@ -61,9 +61,10 @@ class RunpodClient(BaseClient):
             f"{RUNPOD_BASE_URL}/v2/{self.pod_id}/runsync", payload, api_key=self.api_key
         )
         try:
+            usage = response["output"][0]["usage"]
             response_text = response["output"][0]["choices"][0]["text"].strip()
         except KeyError:
             raise ValueError(
                 f"Did not receive valid response from Runpod, response was: {response}"
             )
-        return response_text
+        return response_text, usage

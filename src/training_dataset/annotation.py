@@ -33,7 +33,7 @@ def generate_annotations(
     expected_output_size_chars: int,
     examples_to_create: int,
     language_iso: str = "eng",
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], int, int]:
     """Generate annotations in batches based on token limits.
 
     Args:
@@ -67,6 +67,8 @@ def generate_annotations(
     )
 
     all_annotations = []
+    tokens_in = 0
+    tokens_out = 0
     examples_remaining = examples_to_create
 
     with tqdm(total=examples_to_create, desc="Generating examples") as pbar:
@@ -80,9 +82,11 @@ def generate_annotations(
                     generate_prompt, json_output_fields, batch_size, language_iso
                 )
                 start_time = time.time()
-                response_text = llm_client.generate(prompt)
+                response_text, usage = llm_client.generate(prompt)
                 end_time = time.time()
                 inference_time = end_time - start_time
+                tokens_in += usage["prompt_tokens"]
+                tokens_out += usage["completion_tokens"]
 
                 try:
                     annotations = _parse_response(response_text)
@@ -113,7 +117,7 @@ def generate_annotations(
             examples_remaining -= len(annotations)
             pbar.update(len(annotations))
 
-    return all_annotations
+    return all_annotations, tokens_in, tokens_out
 
 
 def generate_annotations_with_text(
@@ -125,7 +129,7 @@ def generate_annotations_with_text(
     examples_to_create: int,
     use_chunking: bool = True,
     language_iso: str = "eng",
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], int, int]:
     """
     Generate annotations for a given text.
 
@@ -149,6 +153,8 @@ def generate_annotations_with_text(
     expected_keys = set(example_output.keys())
 
     all_annotations = []
+    tokens_in = 0
+    tokens_out = 0
     examples_per_chunk = max(
         1, math.ceil(examples_to_create / len(chunks_with_offsets))
     )
@@ -167,9 +173,11 @@ def generate_annotations_with_text(
                 language_iso,
             )
             start_time = time.time()
-            response_text = llm_client.generate(prompt)
+            response_text, usage = llm_client.generate(prompt)
             end_time = time.time()
             inference_time = end_time - start_time
+            tokens_in += usage["prompt_tokens"]
+            tokens_out += usage["completion_tokens"]
 
             try:
                 annotations = _parse_response(response_text)
@@ -204,7 +212,7 @@ def generate_annotations_with_text(
         if len(all_annotations) >= examples_to_create:
             break
 
-    return all_annotations
+    return all_annotations, tokens_in, tokens_out
 
 
 def _build_prompt_template(

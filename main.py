@@ -163,7 +163,7 @@ def create_annotations_with_corpus(
         content = doc_data.get("content")
 
         start_time = time.time()
-        annotations = generate_annotations_with_text(
+        annotations, tokens_in, tokens_out = generate_annotations_with_text(
             runpod_client,
             content,
             doc_data.get("id"),
@@ -196,6 +196,8 @@ def create_annotations_with_corpus(
             "avg_generation_time_per_annotation": round(
                 avg_inference_time_per_annotation, 3
             ),
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
             "training_dataset_id": job_data["training_dataset_id"],
             "user_id": job_data["user_id"],
             "annotations": annotations,
@@ -235,7 +237,7 @@ def create_annotations(
         language_iso: Language ISO code
     """
     start_time = time.time()
-    annotations = generate_annotations(
+    annotations, tokens_in, tokens_out = generate_annotations(
         runpod_client,
         job_data["generate_prompt"],
         job_data["json_object_fields"],
@@ -267,6 +269,8 @@ def create_annotations(
         "avg_generation_time_per_annotation": round(
             avg_inference_time_per_annotation, 3
         ),
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
         "training_dataset_id": job_data["training_dataset_id"],
         "user_id": job_data["user_id"],
         "annotations": annotations,

@@ -54,7 +54,7 @@ class BaseClient(ABC):
             raise
 
     @abstractmethod
-    def generate(self, prompt: str, **kwargs) -> str:
+    def generate(self, prompt: str, **kwargs) -> tuple[str, dict]:
         """Generate text completion from a prompt.
 
         Args:
@@ -62,6 +62,6 @@ class BaseClient(ABC):
             **kwargs: Additional generation parameters
 
         Returns:
-            Generated text response
+            Generated text response and usage dict
         """
         pass
