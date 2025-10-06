@@ -9,6 +9,7 @@ use the OpenAI API with an API key.
 Put them in a `.env` file:
 
 ```
+APP_ENV=local
 AWS_ACCESS_KEY=
 AWS_SECRET_KEY=
 RUNPOD_API_KEY=

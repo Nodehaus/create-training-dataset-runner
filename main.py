@@ -28,14 +28,15 @@ AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "garage")
 RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY", "")
 RUNPOD_POD_ID = os.getenv("RUNPOD_POD_ID", "")
 APP_S3_BUCKET = os.getenv("APP_S3_BUCKET", "")
+APP_ENV = os.getenv("APP_ENV")
 
 AI_PLATFORM_API_BASE_URL = os.getenv("AI_PLATFORM_API_BASE_URL", "")
 AI_PLATFORM_API_KEY = os.getenv("AI_PLATFORM_API_KEY", "")
 
-DATASTES_PATH = "datasets/"
-JOBS_PATH = "jobs/datasets/"
-JOBS_DONE_PATH = "jobs_done/datasets/"
-JOBS_FAILED_PATH = "jobs_failed/datasets/"
+DATASTES_PATH = f"{APP_ENV}/datasets/"
+JOBS_PATH = f"{APP_ENV}/jobs/datasets/"
+JOBS_DONE_PATH = f"{APP_ENV}/jobs_done/datasets/"
+JOBS_FAILED_PATH = f"{APP_ENV}/jobs_failed/datasets/"
 
 
 def update_training_dataset_status_api(training_dataset_id: str, status: str) -> bool:
